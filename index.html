@@ -62,7 +62,7 @@ iframe
 
 <body>
     <div id="viewport">This visualization requires a browser that supports WebGL</div>
-    <div id="searchBar"><div><span>Search by Cable REFID:</span><input type="text" size="40"/><span>Link to this view: </span><a id="link" href="visualization.html">visualization.html</a></div></div>
+    <div id="searchBar"><div><span>Search by Cable REFID:</span><input type="text" size="40"/><span>Link to this view: </span><a id="link" href="index.html">index.html</a></div></div>
     <iframe id="wikileaks"></iframe>
     <script>
 
@@ -133,7 +133,7 @@ iframe
 
         cameraLookAt = middle;
 
-        url = "visualization.html?zoom=" + scale + "&x=" + middle.x + "&y=" + middle.y;
+        url = "index.html?zoom=" + scale + "&x=" + middle.x + "&y=" + middle.y;
 
         link = document.getElementById("link");
         link.setAttribute("href", url);
