@@ -114,109 +114,189 @@ iframe
     <iframe id="wikileaks"></iframe>
     <script>
 
-
     var points = [];
     
+    // conversion logic to and from string and array buffer
+    function ab2str(buf) 
+    {
+        console.log("bytelength: " + buf.byteLength);
+        u16_array = new Uint16Array(buf);
+        str = "";
+        for(k = 0; k < u16_array.length; k++)
+        {
+            str += String.fromCharCode(u16_array[k]);
+        }
+        return str;
+    }
+
+    function str2ab(str) 
+    {
+        var buf = new ArrayBuffer(str.length*2); // 2 bytes for each char
+        var bufView = new Uint16Array(buf);
+        for (var i=0, strLen=str.length; i<strLen; i++) 
+        {
+            bufView[i] = str.charCodeAt(i);
+        }
+        return buf;
+    }
+
+    // defer logic so the DOM has time to update
     function defer(func)
     {
         window.setTimeout(func, 1);
     }
-    
-    progressPercent = 0;
 
+    // updates the progress bar and text    
+    progressPercent = 0;
     function setLoadingText(text, progress)
     {
         $("#splashscreen #message")[0].innerHTML = text;
 
-        progressPercent += progress;
-
         var progressBarWidth = progressPercent * $('#progressBar').width() / 100;
         $("#progressBar").find("div")[0].style.width = progressBarWidth + "px";
 
-        console.log(text + ", " + progressPercent);
+        progressPercent += progress;
+        console.log(text);
     }
 
-
-    function loadPoints()
+    // download point data from server or local storage, and populate our points array
+    function downloadPoints()
     {
-        setLoadingText("Downloading Point Data...", 30);
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "points.raw", true);
-        xhr.responseType = "arraybuffer";
-
-        xhr.onload = function() 
+        array_buffer = null;
+        // process our point data once the array buffer is full
+        processPointData = function()
         {
-            if (this.status == 200) 
-            {
-                setLoadingText("Processing Point Data...", 5);
+            setLoadingText("Processing Point Data...", 5);
 
-                defer(function ()
+            defer(function()
+            {
+                float_array = new DataView(array_buffer);
+
+                for(k = 0; k < array_buffer.byteLength / 8; k++)
                 {
-                    array_buffer = xhr.response;
-                    float_array = new DataView(array_buffer);
+                    y = -float_array.getFloat32(2 * k * 4, true);
+                    x = -float_array.getFloat32(2 * k * 4 + 4, true);
 
-                    for(k = 0; k < array_buffer.byteLength / 8; k++)
+                    points.push({x : x, y : y});
+                }
+
+                // when we're done we load the cable names
+                downloadNames();
+            });
+        }
+
+        array_buffer = localStorage.getItem("pointData");
+        if(array_buffer == null)
+        {
+            setLoadingText("Downloading Point Data ...", 30);
+            defer(function()
+            {
+                // download from server
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "points.raw", true);
+                xhr.responseType = "arraybuffer";
+
+                xhr.onload = function() 
+                {
+                    if(this.status == 200)
                     {
-                        y = -float_array.getFloat32(2 * k * 4, true);
-                        x = -float_array.getFloat32(2 * k * 4 + 4, true);
-
-                        points.push({x : x, y : y});
+                        array_buffer = xhr.response;
+                        localStorage.setItem("pointData", ab2str(array_buffer));
+                        processPointData();
                     }
-
-                    // when we're done we load the cable names
-                    loadNames();
-                });
-            }
-        };
-        xhr.send();
+                    else
+                    {
+                        setLoadingText("Failed to Download Point Data :(");
+                    }
+                }
+                xhr.send();
+            });
+        }
+        else
+        {
+            setLoadingText("Pulling Point Data from Local Storage...", 30);   
+            defer(function()
+            {
+                array_buffer = str2ab(array_buffer);
+                processPointData();
+            });
+        }
     }
 
-    function loadNames()
+    // download zipped name data from server or local storage, and populate the refids of our point array
+    function downloadNames()
     {
-        setLoadingText("Downloading Cable Names ...", 15);
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", "cablenames.txt.gz", true);
-        xhr.responseType = "arraybuffer";
-
-        xhr.onload = function() 
+        array_bufer = null;
+        // process our name data once the array buffer is full
+        processNames = function()
         {
-            if (this.status == 200) 
+            setLoadingText("Unzipping Cable Names ...", 10);
+            defer(function()
             {
-                setLoadingText("Unzipping Cable Names ...", 10);
+                // raw binary, unzip to ASCII array
+                byte_array = new Uint8Array(array_buffer);
+                gunzip = new Zlib.Gunzip(byte_array);
+                ascii_array = gunzip.decompress();
+
+                setLoadingText("Processing Cable Names ...", 5);
                 defer(function()
                 {
-                    array_buffer = xhr.response;
-                    byte_array = new Uint8Array(array_buffer);
-
-                    gunzip = new Zlib.Gunzip(byte_array);
-                    ascii_array = gunzip.decompress();
-
-                    setLoadingText("Processing Cable Names ...", 5);
-                    defer(function()
+                    // one cable name per line
+                    point_index = 0;
+                    refid = "";
+                    for(k = 0; k < ascii_array.byteLength; k++)
                     {
-                        point_index = 0;
-                        refid = "";
-                        for(k = 0; k < ascii_array.byteLength; k++)
+                        character = String.fromCharCode(ascii_array[k]);
+                        if(character == '\n')
                         {
-                            character = String.fromCharCode(ascii_array[k]);
-                            if(character == '\n')
-                            {
-                                points[point_index++].refid = refid;
-                                refid = "";
-                            }
-                            else
-                            {
-                                refid += character;
-                            }
+                            points[point_index++].refid = refid;
+                            refid = "";
                         }
+                        else
+                        {
+                            refid += character;
+                        }
+                    }
 
-                        createPage();
-                    });
+                    createPage();
                 });
-                
-            }
-        };
-        xhr.send();
+            });
+        }
+
+        // try and get from local storage, otherwise download
+        array_buffer = localStorage.getItem("nameData");
+        if(array_buffer == null)
+        {
+            setLoadingText("Downloading Cable Names ...", 15);
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", "cablenames.txt.gz", true);
+            xhr.responseType = "arraybuffer";
+
+            xhr.onload = function() 
+            {
+                if (this.status == 200) 
+                {
+                    array_buffer = xhr.response;
+                    console.log(array_buffer.byteLength);
+                    localStorage.setItem("nameData", ab2str(array_buffer));
+                    processNames();
+                }
+                else
+                {
+                    setLoadingText("Failed to Download Name Data :(");
+                }
+            };
+            xhr.send();
+        }
+        else
+        {
+            setLoadingText("Pulling Name Data from Local Storage ...", 15);
+            defer(function()
+            {
+                array_buffer = str2ab(array_buffer);
+                processNames();
+            });
+        }
     }
 
     // called once the points array has been generated
@@ -476,7 +556,7 @@ iframe
         });
     }
 
-    loadPoints();
+    downloadPoints();
 
     </script>
 </body>
