@@ -43,7 +43,7 @@ div#splashscreen div#loading
         width: 400px;
         height: 22px;
         border: 1px solid #111;
-        background-color: #292929;
+        background-color: #555  ;
         display: inline-block;
 }
  
@@ -116,6 +116,17 @@ iframe
 
     var points = [];
     
+    supportsLocalStorage = function ()
+    {
+        try 
+        {
+            return 'localStorage' in window && window['localStorage'] !== null;
+        } catch(e)
+        {
+            return false;
+        }
+    }();
+
     // conversion logic to and from string and array buffer
     function ab2str(buf) 
     {
@@ -143,7 +154,7 @@ iframe
     // defer logic so the DOM has time to update
     function defer(func)
     {
-        window.setTimeout(func, 1);
+        window.setTimeout(func, 10);
     }
 
     // updates the progress bar and text    
@@ -185,7 +196,7 @@ iframe
             });
         }
 
-        array_buffer = localStorage.getItem("pointData");
+        array_buffer = supportsLocalStorage ? localStorage.getItem("pointData") : null;
         if(array_buffer == null)
         {
             setLoadingText("Downloading Point Data ...", 30);
@@ -201,7 +212,7 @@ iframe
                     if(this.status == 200)
                     {
                         array_buffer = xhr.response;
-                        localStorage.setItem("pointData", ab2str(array_buffer));
+                        if(supportsLocalStorage) localStorage.setItem("pointData", ab2str(array_buffer));
                         processPointData();
                     }
                     else
@@ -264,7 +275,7 @@ iframe
         }
 
         // try and get from local storage, otherwise download
-        array_buffer = localStorage.getItem("nameData");
+        array_buffer = supportsLocalStorage ? localStorage.getItem("nameData") : null;
         if(array_buffer == null)
         {
             setLoadingText("Downloading Cable Names ...", 15);
@@ -277,8 +288,7 @@ iframe
                 if (this.status == 200) 
                 {
                     array_buffer = xhr.response;
-                    console.log(array_buffer.byteLength);
-                    localStorage.setItem("nameData", ab2str(array_buffer));
+                    if(supportsLocalStorage) localStorage.setItem("nameData", ab2str(array_buffer));
                     processNames();
                 }
                 else
@@ -447,7 +457,7 @@ iframe
                     {
                         if(currentDocument != null && moving == false)
                         {
-                            iframe.src = "http://www.cablegatesearch.net/cable.php?id=" + currentDocument;
+                            iframe.src = "https://cablegatesearch.wikileaks.org/cable.php?id=" + currentDocument;
                         }
 
                         moving = false;
